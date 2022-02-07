@@ -96,6 +96,15 @@ namespace FreeSql.Internal.CommonProvider
         }
         public void InternalOrderBy(Expression exp, bool isDescending)
         {
+            if (exp.NodeType == ExpressionType.Lambda) exp = (exp as LambdaExpression)?.Body;
+            if (exp?.NodeType == ExpressionType.New)
+            {
+                var newExp = exp as NewExpression;
+                if (newExp != null)
+                    for (var a = 0; a < newExp.Members.Count; a++)
+                        InternalOrderBy(newExp.Arguments[a], isDescending);
+                return;
+            }
             var sql = _comonExp.ExpressionWhereLambda(null, exp, this, null, null);
             var method = _select.GetType().GetMethod("OrderBy", new[] { typeof(string), typeof(object) });
             method.Invoke(_select, new object[] { isDescending ? $"{sql} DESC" : sql, null });
@@ -150,6 +159,7 @@ namespace FreeSql.Internal.CommonProvider
                 case DataType.OdbcOracle:
                 case DataType.Dameng:
                 case DataType.OdbcDameng: //Oracle、Dameng 分组时，嵌套分页
+                case DataType.GBase:
                     isNestedPageSql = true;
                     break;
                 default:
@@ -198,6 +208,14 @@ namespace FreeSql.Internal.CommonProvider
         {
             _groupBySkip = Math.Max(0, pageNumber - 1) * pageSize;
             _groupByLimit = pageSize;
+            return this;
+        }
+
+        public ISelectGrouping<TKey, TValue> Page(BasePagingInfo pagingInfo)
+        {
+            pagingInfo.Count = this.Count();
+            _groupBySkip = Math.Max(0, pagingInfo.PageNumber - 1) * pagingInfo.PageSize;
+            _groupByLimit = pagingInfo.PageSize;
             return this;
         }
 

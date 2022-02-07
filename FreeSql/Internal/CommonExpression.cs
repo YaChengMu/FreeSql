@@ -378,6 +378,7 @@ namespace FreeSql.Internal
                 objval = Utils.GetDataReaderValue(parent.CsType, objval);
                 if (parent.Property != null && parent.CsType != parent.Property.PropertyType)
                     objval = Utils.GetDataReaderValue(parent.Property.PropertyType, objval);
+                if (objval == DBNull.Value) objval = null;
                 return objval;
             }
             var ctorParmsLength = 0;
@@ -1004,6 +1005,19 @@ namespace FreeSql.Internal
                                         var fsqlSelect0 = fsql as Select0Provider;
                                         switch (exp3.Method.Name) {
                                             case "Any": //exists
+                                                switch (_ado.DataType)
+                                                {
+                                                    case DataType.Oracle:
+                                                    case DataType.OdbcOracle:
+                                                    case DataType.Dameng:
+                                                    case DataType.OdbcDameng:
+                                                    case DataType.GBase:
+                                                        break;
+                                                    default:
+                                                        fsqlSelect0._limit = 1; //#462 ORACLE rownum <= 2 会影响索引变慢
+                                                        break;
+                                                }
+                                                break;
                                             case "ToOne":
                                             case "First":
                                                 fsqlSelect0._limit = 1; //#462
@@ -1052,24 +1066,31 @@ namespace FreeSql.Internal
                                             else
                                             {
                                                 var argExp = (arg3Exp as UnaryExpression)?.Operand;
-                                                if (argExp != null && argExp.NodeType == ExpressionType.Lambda)
+                                                if (argExp != null)
                                                 {
-                                                    if (fsqltable1SetAlias == false)
+                                                    if (argExp.NodeType == ExpressionType.Lambda)
                                                     {
-                                                        fsqltable1SetAlias = true;
-                                                        var argExpLambda = argExp as LambdaExpression;
-                                                        var fsqlTypeGenericArgs = fsqlType.GetGenericArguments();
+                                                        if (fsqltable1SetAlias == false)
+                                                        {
+                                                            fsqltable1SetAlias = true;
+                                                            var argExpLambda = argExp as LambdaExpression;
+                                                            var fsqlTypeGenericArgs = fsqlType.GetGenericArguments();
 
-                                                        if (argExpLambda.Parameters.Count == 1 && argExpLambda.Parameters[0].Type.FullName.StartsWith("FreeSql.Internal.Model.HzyTuple`"))
-                                                        {
-                                                            for (var gai = 0; gai < fsqlTypeGenericArgs.Length; gai++)
-                                                                fsqltables[gai].Alias = "ht" + (gai + 1);
+                                                            if (argExpLambda.Parameters.Count == 1 && argExpLambda.Parameters[0].Type.FullName.StartsWith("FreeSql.Internal.Model.HzyTuple`"))
+                                                            {
+                                                                for (var gai = 0; gai < fsqlTypeGenericArgs.Length; gai++)
+                                                                    fsqltables[gai].Alias = "ht" + (gai + 1);
+                                                            }
+                                                            else
+                                                            {
+                                                                for (var gai = 0; gai < fsqlTypeGenericArgs.Length && gai < argExpLambda.Parameters.Count; gai++)
+                                                                    fsqltables[gai].Alias = argExpLambda.Parameters[gai].Name;
+                                                            }
                                                         }
-                                                        else
-                                                        {
-                                                            for (var gai = 0; gai < fsqlTypeGenericArgs.Length && gai < argExpLambda.Parameters.Count; gai++)
-                                                                fsqltables[gai].Alias = argExpLambda.Parameters[gai].Name;
-                                                        }
+                                                    }
+                                                    else
+                                                    {
+                                                        argExp = null;
                                                     }
                                                 }
                                                 args[a] = argExp ?? Expression.Lambda(arg3Exp).Compile().DynamicInvoke();
@@ -1104,7 +1125,7 @@ namespace FreeSql.Internal
                                 if (fsql != null)
                                 {
                                     if (asSelectParentExp != null)
-                                    { //执行 asSelect() 的关联，OneToMany，ManyToMany
+                                    { //执行 AsSelect() 的关联，OneToMany，ManyToMany
                                         if (fsqltables[0].Parameter == null)
                                         {
                                             fsqltables[0].Alias = $"tb_{fsqltables.Count}";
@@ -1275,15 +1296,31 @@ namespace FreeSql.Internal
                                         case "ToOne":
                                         case "First":
                                             var tscClone2 = tsc.CloneDisableDiyParse();
-                                            tscClone2.subSelect001 = fsql as Select0Provider; //#405 Oracle within group(order by ..)
+                                            var fsqlSelect0p = fsql as Select0Provider;
+                                            tscClone2.subSelect001 = fsqlSelect0p; //#405 Oracle within group(order by ..)
                                             tscClone2.isDisableDiyParse = false;
                                             tscClone2._tables = fsqltables;
                                             var exp3Args02 = (exp3.Arguments.FirstOrDefault() as UnaryExpression)?.Operand as LambdaExpression;
                                             if (exp3Args02.Parameters.Count == 1 && exp3Args02.Parameters[0].Type.FullName.StartsWith("FreeSql.Internal.Model.HzyTuple`"))
                                                 exp3Args02 = new ReplaceHzyTupleToMultiParam().Modify(exp3Args02, fsqltables);
-                                            var sqlFirst = fsqlType.GetMethod("ToSql", new Type[] { typeof(string) })?.Invoke(fsql, new object[] { ExpressionLambdaToSql(exp3Args02, tscClone2) })?.ToString();
+                                            var sqlFirstField = ExpressionLambdaToSql(exp3Args02, tscClone2);
+                                            var sqlFirst = fsqlType.GetMethod("ToSql", new Type[] { typeof(string) })?.Invoke(fsql, new object[] { sqlFirstField })?.ToString();
                                             if (string.IsNullOrEmpty(sqlFirst) == false)
+                                            {
+                                                if (fsqlSelect0p._limit > 0)
+                                                {
+                                                    switch (_ado.DataType) //使用 Limit 后的 IN 子查询需要套一层
+                                                    {
+                                                        case DataType.MySql:
+                                                        case DataType.OdbcMySql:
+                                                        case DataType.GBase:
+                                                            if (exp3.Method.Name == "ToList")
+                                                                return $"( SELECT * FROM ({sqlFirst.Replace(" \r\n", " \r\n    ")}) ftblmt50 )";
+                                                            break;
+                                                    }
+                                                }
                                                 return $"({sqlFirst.Replace(" \r\n", " \r\n    ")})";
+                                            }
                                             break;
                                     }
                                 }
@@ -1849,6 +1886,7 @@ namespace FreeSql.Internal
             {
                 if (obj == null) return "NULL";
                 var paramName = $"exp_{dbParams.Count}";
+                if (_common._orm?.Ado.DataType == DataType.GBase) paramName = "?";
                 var parm = _common.AppendParamter(dbParams, paramName, mapColumn,
                     mapType ?? mapColumn?.Attribute.MapType ?? obj?.GetType(), mapType == null ? obj : Utils.GetDataReaderValue(mapType, obj));
                 return _common.QuoteParamterName(paramName);

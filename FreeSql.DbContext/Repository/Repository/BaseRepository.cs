@@ -40,7 +40,7 @@ namespace FreeSql
             {
                 _dbsetPriv?.Dispose();
                 _dbPriv?.Dispose();
-                this.DataFilter.Dispose();
+                this.DataFilter?.Dispose();
             }
             finally
             {
@@ -127,6 +127,7 @@ namespace FreeSql
             return this;
         }
         public void FlushState() => _dbset.FlushState();
+        public Dictionary<string, object[]> CompareState(TEntity newdata) => _dbset.CompareState(newdata);
 
         public virtual TEntity InsertOrUpdate(TEntity entity)
         {

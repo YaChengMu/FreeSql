@@ -278,7 +278,7 @@ isnull(e.name,'') + '.' + isnull(d.name,'')
   else cast(a.max_length as varchar) end + ')'
  when b.name in ('numeric', 'decimal') then '(' + cast(a.precision as varchar) + ',' + cast(a.scale as varchar) + ')'
  else '' end as 'sqltype'
-,( select value from sys.extended_properties where major_id = a.object_id AND minor_id = a.column_id AND name = 'MS_Description') 'comment'
+,( select value from sys.extended_properties where major_id = a.object_id AND minor_id = a.column_id AND name = 'MS_Description' and class=1) 'comment'
 {0} a
 inner join sys.types b on b.user_type_id = a.user_type_id
 left join sys.tables d on d.object_id = a.object_id
@@ -332,7 +332,7 @@ from sys.parameters", loc88.ToString().Replace("a.table_name", "a.object_id"), "
                         DbTypeText = type,
                         DbTypeTextFull = sqlType,
                         Table = loc2[object_id],
-                        Coment = comment,
+                        Comment = comment,
                         DefaultValue = defaultValue,
                         Position = ++position
                     });

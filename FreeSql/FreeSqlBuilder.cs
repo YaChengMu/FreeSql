@@ -171,8 +171,12 @@ namespace FreeSql
             if (string.IsNullOrEmpty(_masterConnectionString) && _connectionFactory == null) throw new Exception("参数 masterConnectionString 不可为空，请检查 UseConnectionString");
             IFreeSql<TMark> ret = null;
             var type = _providerType;
-            if (type?.IsGenericType == true) type = type.MakeGenericType(typeof(TMark));
-            if (type == null)
+            if (type != null)
+            {
+                if (type.IsGenericTypeDefinition)
+                    type = type.MakeGenericType(typeof(TMark));
+            }
+            else
             {
                 Action<string, string> throwNotFind = (dll, providerType) => throw new Exception($"缺少 FreeSql 数据库实现包：{dll}，可前往 nuget 下载；如果存在 {dll} 依然报错（原因是环境问题导致反射不到类型），请在 UseConnectionString/UseConnectionFactory 第三个参数手工传入 typeof({providerType})");
                 switch (_dataType)
@@ -197,6 +201,7 @@ namespace FreeSql
                         break;
                     case DataType.Sqlite:
                         type = Type.GetType("FreeSql.Sqlite.SqliteProvider`1,FreeSql.Provider.Sqlite")?.MakeGenericType(typeof(TMark));
+                        if (type == null) type = Type.GetType("FreeSql.Sqlite.SqliteProvider`1,FreeSql.Provider.SqliteCore")?.MakeGenericType(typeof(TMark)); //Microsoft.Data.Sqlite.Core.dll
                         if (type == null) throwNotFind("FreeSql.Provider.Sqlite.dll", "FreeSql.Sqlite.SqliteProvider<>");
                         break;
 
@@ -259,6 +264,16 @@ namespace FreeSql
                     case DataType.Custom:
                         type = Type.GetType("FreeSql.Custom.CustomProvider`1,FreeSql.Provider.Custom")?.MakeGenericType(typeof(TMark));
                         if (type == null) throwNotFind("FreeSql.Provider.Custom.dll", "FreeSql.Custom.CustomProvider<>");
+                        break;
+
+                    case DataType.ClickHouse:
+                        type = Type.GetType("FreeSql.ClickHouse.ClickHouseProvider`1,FreeSql.Provider.ClickHouse")?.MakeGenericType(typeof(TMark));
+                        if (type == null) throwNotFind("FreeSql.Provider.ClickHouse.dll", "FreeSql.ClickHouse.ClickHouseProvider<>");
+                        break;
+
+                    case DataType.GBase:
+                        type = Type.GetType("FreeSql.GBase.GBaseProvider`1,FreeSql.Provider.GBase")?.MakeGenericType(typeof(TMark));
+                        if (type == null) throwNotFind("FreeSql.Provider.GBase.dll", "FreeSql.GBase.GBaseProvider<>");
                         break;
 
                     default: throw new Exception("未指定 UseConnectionString 或者 UseConnectionFactory");

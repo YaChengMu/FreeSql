@@ -37,6 +37,10 @@ namespace FreeSql.Internal.CommonProvider
             _commonUtils = commonUtils;
             _commonExpression = commonExpression;
             _table = _commonUtils.GetTableByEntity(typeof(T1));
+            if (_table == null)
+            {
+                throw new Exception($"InsertOrUpdate<>的泛型参数 不支持 {typeof(T1)},请传递您的实体类");
+            }
             if (_orm.CodeFirst.IsAutoSyncStructure && typeof(T1) != typeof(object)) _orm.CodeFirst.SyncStructure<T1>();
             IdentityColumn = _table.Primarys.Where(a => a.Attribute.IsIdentity).FirstOrDefault();
         }
@@ -169,7 +173,7 @@ namespace FreeSql.Internal.CommonProvider
                         object val = col.GetDbValue(d);
                         sb.Append(_commonUtils.RewriteColumn(col, _commonUtils.GetNoneParamaterSqlValue(dbParams, "cu", col, col.Attribute.MapType, val)));
                     }
-                    if (didx == 0) sb.Append(" as ").Append(col.Attribute.Name);
+                    if (didx == 0) sb.Append(" as ").Append(_commonUtils.QuoteSqlName(col.Attribute.Name));
                     ++colidx2;
                 }
                 switch (_orm.Ado.DataType)
@@ -178,6 +182,7 @@ namespace FreeSql.Internal.CommonProvider
                     case DataType.Oracle:
                     case DataType.OdbcDameng:
                     case DataType.Dameng:
+                    case DataType.GBase:
                         sb.Append(" FROM dual");
                         break;
                     case DataType.Firebird:

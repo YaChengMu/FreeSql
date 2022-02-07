@@ -951,6 +951,14 @@ FROM ""TB_TOPIC22"" a
 WHERE (((to_char(a.""ID"")) in (SELECT b.""TITLE"" 
     FROM ""TB_TOPIC22"" b)))", subquery);
             var subqueryList = select.Where(a => select.As("b").ToList(b => b.Title).Contains(a.Id.ToString())).ToList();
+
+            subquery = select.Where(a => select.As("b").Limit(10).ToList(b => b.Title).Contains(a.Id.ToString())).ToSql();
+            Assert.Equal(@"SELECT a.""ID"", a.""CLICKS"", a.""TYPEGUID"", a.""TITLE"", a.""CREATETIME"" 
+FROM ""TB_TOPIC22"" a 
+WHERE (((to_char(a.""ID"")) in (SELECT b.""TITLE"" 
+    FROM ""TB_TOPIC22"" b 
+    WHERE ROWNUM < 11)))", subquery);
+            subqueryList = select.Where(a => select.As("b").Limit(10).ToList(b => b.Title).Contains(a.Id.ToString())).ToList();
         }
         [Fact]
         public void As()
@@ -1687,6 +1695,9 @@ WHERE (((to_char(a.""ID"")) in (SELECT b.""TITLE""
             Assert.Equal(2, g.dameng.Select<ToUpd1Pk>().Where(a => a.name.StartsWith("name")).ToUpdate().Set(a => a.name, "nick?").ExecuteAffrows());
             Assert.Equal(5, g.dameng.Select<ToUpd1Pk>().Count());
             Assert.Equal(5, g.dameng.Select<ToUpd1Pk>().Where(a => a.name.StartsWith("nick")).Count());
+
+            var toupdateSql1 = g.dameng.Select<ToUpd1Pk>().Where(a => a.name.StartsWith("name")).ToUpdate().Set(a => a.name, "nick?").ToSql();
+            var toupdateSql2 = g.dameng.Select<ToUpd1Pk>().AsTable((_, old) => "toupd1pk_test").Where(a => a.name.StartsWith("name")).ToUpdate().Set(a => a.name, "nick?").ToSql();
 
             g.dameng.Select<ToUpd2Pk>().ToDelete().ExecuteAffrows();
             Assert.Equal(0, g.dameng.Select<ToUpd2Pk>().Count());

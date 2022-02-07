@@ -56,6 +56,17 @@ namespace FreeSql
     {
         internal static ThreadLocal<ExpressionCallContext> expContext = new ThreadLocal<ExpressionCallContext>();
 
+        //public static bool BitAnd<TEnum>(TEnum enum1, [RawValue] TEnum enum2)
+        //{
+        //    expContext.Value.Result = $"({expContext.Value.ParsedContent["enum1"]} & {Convert.ToInt32(enum2)}) = {Convert.ToInt32(enum2)}";
+        //    return false;
+        //}
+        //public static bool BitOr<TEnum>(TEnum enum1, [RawValue] TEnum enum2)
+        //{
+        //    expContext.Value.Result = $"({expContext.Value.ParsedContent["enum1"]} | {Convert.ToInt32(enum2)}) = {Convert.ToInt32(enum2)}";
+        //    return false;
+        //}
+
         #region SqlServer/PostgreSQL over
         /// <summary>
         /// rank() over(order by ...)
@@ -129,6 +140,17 @@ namespace FreeSql
             return 0;
         }
 
+        /// <summary>
+        /// 注意：使用者自己承担【注入风险】
+        /// </summary>
+        /// <param name="sql"></param>
+        /// <returns></returns>
+        static bool InternalRawSql([RawValue] string sql)
+        {
+            expContext.Value.Result = sql;
+            return false;
+        }
+
         #region 大小判断
         /// <summary>
         /// 大于 &gt;
@@ -173,6 +195,26 @@ namespace FreeSql
         /// </summary>
         /// <returns></returns>
         public static ICaseWhenEnd Case() => SqlExtExtensions.Case();
+        /// <summary>
+        /// case when .. then .. end
+        /// </summary>
+        /// <typeparam name="TInput"></typeparam>
+        /// <typeparam name="TOutput"></typeparam>
+        /// <param name="input"></param>
+        /// <param name="dict"></param>
+        /// <returns></returns>
+        public static TOutput CaseDict<TInput, TOutput>(TInput input, [RawValue] Dictionary<TInput, TOutput> dict)
+        {
+            var ec = expContext.Value;
+            var sb = new StringBuilder();
+            sb.Append("case");
+            foreach (var kv in dict)
+                sb.Append(" when ").Append(ec.ParsedContent["input"]).Append(" = ").Append(ec.FormatSql(kv.Key))
+                    .Append(" then ").Append(ec.FormatSql(kv.Value));
+            sb.Append(" end");
+            ec.Result = sb.ToString();
+            return default;
+        }
         /// <summary>
         /// MySql group_concat(distinct .. order by .. separator ..)
         /// </summary>
@@ -427,6 +469,15 @@ namespace FreeSql
         public static string StringJoinFirebirdList(object column, object delimiter)
         {
             expContext.Result = $"list({expContext.ParsedContent["column"]},{expContext.ParsedContent["delimiter"]})";
+            return null;
+        }
+        public static string StringJoinGBaseWmConcatText(object column, object delimiter)
+        {
+            if (expContext.ParsedContent["delimiter"] == "','")
+                expContext.Result = $"wm_concat_text({expContext.ParsedContent["column"]})";
+            else
+                throw new NotImplementedException("GBase 暂时不支持逗号以外的分割符");
+            //expContext.Result = $"replace(wm_concat_text({expContext.ParsedContent["column"]}), ',', {expContext.ParsedContent["delimiter"]})";
             return null;
         }
         #endregion

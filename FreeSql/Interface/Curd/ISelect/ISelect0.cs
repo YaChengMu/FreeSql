@@ -18,6 +18,7 @@ namespace FreeSql
 #if net40
 #else
         Task<DataTable> ToDataTableAsync(string field = null, CancellationToken cancellationToken = default);
+        Task<DataTable> ToDataTableByPropertyNameAsync(string[] properties, CancellationToken cancellationToken = default);
         Task<Dictionary<TKey, T1>> ToDictionaryAsync<TKey>(Func<T1, TKey> keySelector, CancellationToken cancellationToken = default);
         Task<Dictionary<TKey, TElement>> ToDictionaryAsync<TKey, TElement>(Func<T1, TKey> keySelector, Func<T1, TElement> elementSelector, CancellationToken cancellationToken = default);
         Task<List<T1>> ToListAsync(bool includeNestedMembers = false, CancellationToken cancellationToken = default);
@@ -72,6 +73,12 @@ namespace FreeSql
         /// </summary>
         /// <returns></returns>
         DataTable ToDataTable(string field = null);
+        /// <summary>
+        /// 执行SQL查询，返回 properties 指定的实体类属性，并以 DataTable 接收
+        /// </summary>
+        /// <param name="properties">属性名：Name<para></para>导航属性：Parent.Name<para></para>多表：b.Name</param>
+        /// <returns></returns>
+        DataTable ToDataTableByPropertyName(string[] properties);
 
         /// <summary>
         /// 以字典的形式返回查询结果<para></para>
@@ -401,6 +408,13 @@ namespace FreeSql
         /// <param name="pageSize">每页多少</param>
         /// <returns></returns>
         TSelect Page(int pageNumber, int pageSize);
+
+        /// <summary>
+        /// 分页
+        /// </summary>
+        /// <param name="pagingInfo">分页信息</param>
+        /// <returns></returns>
+        TSelect Page(BasePagingInfo pagingInfo);
 
         /// <summary>
         /// 查询数据前，去重

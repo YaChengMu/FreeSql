@@ -122,10 +122,10 @@ namespace FreeSql.Odbc.Dameng
                         tsc.SetMapColumnTmp(null);
                         var args1 = getExp(callExp.Arguments[argIndex]);
                         var oldMapType = tsc.SetMapTypeReturnOld(tsc.mapTypeTmp);
-                        var oldDbParams = tsc.SetDbParamsReturnOld(null);
+                        //var oldDbParams = tsc.SetDbParamsReturnOld(null); #900 UseGenerateCommandParameterWithLambda(true) 子查询 bug
                         var left = objExp == null ? null : getExp(objExp);
                         tsc.SetMapColumnTmp(null).SetMapTypeReturnOld(oldMapType);
-                        tsc.SetDbParamsReturnOld(oldDbParams);
+                        //tsc.SetDbParamsReturnOld(oldDbParams);
                         switch (callExp.Method.Name)
                         {
                             case "Contains":
@@ -141,6 +141,7 @@ namespace FreeSql.Odbc.Dameng
                     for (var a = 0; a < arrExp.Expressions.Count; a++)
                     {
                         if (a > 0) arrSb.Append(",");
+                        if (a % 500 == 499) arrSb.Append("   \r\n    \r\n"); //500元素分割, 3空格\r\n4空格
                         arrSb.Append(getExp(arrExp.Expressions[a]));
                     }
                     if (arrSb.Length == 1) arrSb.Append("NULL");

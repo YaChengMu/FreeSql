@@ -111,6 +111,7 @@ namespace FreeSql.Internal.CommonProvider
                 {
                     case DataType.Oracle:
                     case DataType.OdbcOracle:
+                    case DataType.GBase:
                         ExecuteNonQuery(null, null, CommandType.Text, " SELECT 1 FROM dual", commandTimeout);
                         return true;
                     case DataType.Firebird:
@@ -557,7 +558,7 @@ namespace FreeSql.Internal.CommonProvider
         public void ExecuteReader(Action<FetchCallbackArgs<DbDataReader>> fetchHandler, CommandType cmdType, string cmdText, params DbParameter[] cmdParms) => ExecuteReader(null, null, fetchHandler, cmdType, cmdText, 0, cmdParms);
         public void ExecuteReader(DbTransaction transaction, Action<FetchCallbackArgs<DbDataReader>> fetchHandler, CommandType cmdType, string cmdText, params DbParameter[] cmdParms) => ExecuteReader(null, transaction, fetchHandler, cmdType, cmdText, 0, cmdParms);
         public void ExecuteReader(DbConnection connection, DbTransaction transaction, Action<FetchCallbackArgs<DbDataReader>> fetchHandler, CommandType cmdType, string cmdText, int cmdTimeout, params DbParameter[] cmdParms) => ExecuteReaderMultiple(1, connection, transaction, (fetch, result) => fetchHandler(fetch), null, cmdType, cmdText, cmdTimeout, cmdParms);
-        void ExecuteReaderMultiple(int multipleResult, DbConnection connection, DbTransaction transaction, Action<FetchCallbackArgs<DbDataReader>, int> fetchHandler, Action<DbDataReader, int> schemaHandler, CommandType cmdType, string cmdText, int cmdTimeout, params DbParameter[] cmdParms)
+        public void ExecuteReaderMultiple(int multipleResult, DbConnection connection, DbTransaction transaction, Action<FetchCallbackArgs<DbDataReader>, int> fetchHandler, Action<DbDataReader, int> schemaHandler, CommandType cmdType, string cmdText, int cmdTimeout, params DbParameter[] cmdParms)
         {
             if (string.IsNullOrEmpty(cmdText)) return;
             var dt = DateTime.Now;
@@ -851,6 +852,7 @@ namespace FreeSql.Internal.CommonProvider
 
             if (cmdParms != null)
             {
+                var dbpool = MasterPool as FreeSql.Internal.CommonProvider.DbConnectionPool;
                 foreach (var parm in cmdParms)
                 {
                     if (parm == null) continue;
@@ -871,7 +873,32 @@ namespace FreeSql.Internal.CommonProvider
                             });
                         }
                     }
-                    if (isnew == false) cmd.Parameters.Add(parm);
+                    if (isnew == false)
+                    {
+                        if (dbpool == null) cmd.Parameters.Add(parm);
+                        else
+                        {
+                            var newparm = cmd.CreateParameter(); // UseConnectionFactory 转换 DbParameter
+                            if (newparm.GetType() == parm.GetType()) cmd.Parameters.Add(parm);
+                            else
+                            {
+                                newparm.DbType = parm.DbType;
+                                newparm.Direction = parm.Direction;
+                                newparm.ParameterName = parm.ParameterName;
+#if net40 || net45
+#else
+                                newparm.Precision = parm.Precision;
+                                newparm.Scale = parm.Scale;
+#endif
+                                newparm.Size = parm.Size;
+                                newparm.SourceColumn = parm.SourceColumn;
+                                newparm.SourceColumnNullMapping = parm.SourceColumnNullMapping;
+                                newparm.SourceVersion = parm.SourceVersion;
+                                newparm.Value = parm.Value;
+                                cmd.Parameters.Add(newparm);
+                            }
+                        }
+                    }
                 }
             }
 

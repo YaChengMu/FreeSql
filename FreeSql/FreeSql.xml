@@ -516,6 +516,11 @@
         </member>
         <member name="P:FreeSql.DatabaseModel.DbColumnInfo.Coment">
             <summary>
+            备注，早期编码时少按了一个字母，请使用 Comment
+            </summary>
+        </member>
+        <member name="P:FreeSql.DatabaseModel.DbColumnInfo.Comment">
+            <summary>
             备注
             </summary>
         </member>
@@ -654,6 +659,11 @@
             <summary>
             自定义适配器，访问任何数据库<para></para>
             注意：该类型不提供 DbFirst/CodeFirst 功能
+            </summary>
+        </member>
+        <member name="F:FreeSql.DataType.GBase">
+            <summary>
+            天津南大通用数据技术股份有限公司成立于2004年,是国产数据库、大数据领域的知名企业，基于 Odbc 的实现
             </summary>
         </member>
         <member name="M:FreeSql.AdoNetExtensions.GetIFreeSql(System.Data.IDbConnection)">
@@ -1202,6 +1212,13 @@
             <param name="column"></param>
             <returns></returns>
         </member>
+        <member name="M:FreeSql.SqlExt.InternalRawSql(System.String)">
+            <summary>
+            注意：使用者自己承担【注入风险】
+            </summary>
+            <param name="sql"></param>
+            <returns></returns>
+        </member>
         <member name="M:FreeSql.SqlExt.GreaterThan``1(``0,``0)">
             <summary>
             大于 &gt;
@@ -1230,6 +1247,16 @@
             <summary>
             case when .. then .. end
             </summary>
+            <returns></returns>
+        </member>
+        <member name="M:FreeSql.SqlExt.CaseDict``2(``0,System.Collections.Generic.Dictionary{``0,``1})">
+            <summary>
+            case when .. then .. end
+            </summary>
+            <typeparam name="TInput"></typeparam>
+            <typeparam name="TOutput"></typeparam>
+            <param name="input"></param>
+            <param name="dict"></param>
             <returns></returns>
         </member>
         <member name="M:FreeSql.SqlExt.GroupConcat(System.Object)">
@@ -1782,6 +1809,13 @@
             </summary>
             <returns></returns>
         </member>
+        <member name="M:FreeSql.ISelect0`2.ToDataTableByPropertyName(System.String[])">
+            <summary>
+            执行SQL查询，返回 properties 指定的实体类属性，并以 DataTable 接收
+            </summary>
+            <param name="properties">属性名：Name<para></para>导航属性：Parent.Name<para></para>多表：b.Name</param>
+            <returns></returns>
+        </member>
         <member name="M:FreeSql.ISelect0`2.ToDictionary``1(System.Func{`1,``0})">
             <summary>
             以字典的形式返回查询结果<para></para>
@@ -2134,6 +2168,13 @@
             </summary>
             <param name="pageNumber">第几页</param>
             <param name="pageSize">每页多少</param>
+            <returns></returns>
+        </member>
+        <member name="M:FreeSql.ISelect0`2.Page(FreeSql.Internal.Model.BasePagingInfo)">
+            <summary>
+            分页
+            </summary>
+            <param name="pagingInfo">分页信息</param>
             <returns></returns>
         </member>
         <member name="M:FreeSql.ISelect0`2.Distinct">
@@ -2605,6 +2646,13 @@
             </summary>
             <param name="pageNumber">第几页</param>
             <param name="pageSize">每页多少</param>
+            <returns></returns>
+        </member>
+        <member name="M:FreeSql.ISelectGrouping`2.Page(FreeSql.Internal.Model.BasePagingInfo)">
+            <summary>
+            分页
+            </summary>
+            <param name="pagingInfo">分页信息</param>
             <returns></returns>
         </member>
         <member name="M:FreeSql.ISelectGrouping`2.Count">
@@ -3976,6 +4024,26 @@
             <param name="commandTimeout"></param>
             <returns></returns>
         </member>
+        <member name="T:FreeSql.Internal.Model.BasePagingInfo">
+            <summary>
+            分页信息
+            </summary>
+        </member>
+        <member name="P:FreeSql.Internal.Model.BasePagingInfo.PageNumber">
+            <summary>
+            第几页，从1开始
+            </summary>
+        </member>
+        <member name="P:FreeSql.Internal.Model.BasePagingInfo.PageSize">
+            <summary>
+            每页多少
+            </summary>
+        </member>
+        <member name="P:FreeSql.Internal.Model.BasePagingInfo.Count">
+            <summary>
+            查询的记录数量
+            </summary>
+        </member>
         <member name="P:FreeSql.Internal.Model.BatchProgressStatus`1.Data">
             <summary>
             当前操作的数据
@@ -4121,6 +4189,27 @@
             <summary>
             not in (1,2,3)<para></para>
             此时 Value 的值格式为逗号分割：value1,value2,value3... 或者数组
+            </summary>
+        </member>
+        <member name="F:FreeSql.Internal.Model.DynamicFilterOperator.Custom">
+            <summary>
+            自定义解析，此时 Field 为反射信息，Value 为静态方法的参数(string)<para></para>
+            示范：{ Operator: "Custom", Field: "RawSql webapp1.DynamicFilterCustom,webapp1", Value: "(id,name) in ((1,'k'),(2,'m'))" }<para></para>
+            注意：使用者自己承担【注入风险】<para></para>
+            静态方法定义示范：<para></para>
+            namespace webapp1<para></para>
+            {<para></para>
+            public class DynamicFilterCustom<para></para>
+            {<para></para>
+            [DynamicFilterCustom]<para></para>
+            public static string RawSql(string value) => value;<para></para>
+            }<para></para>
+            }<para></para>
+            </summary>
+        </member>
+        <member name="T:FreeSql.Internal.Model.DynamicFilterCustomAttribute">
+            <summary>
+            授权 DynamicFilter 支持 Custom 自定义解析
             </summary>
         </member>
         <member name="P:FreeSql.Internal.Model.FetchCallbackArgs`1.IsBreak">

@@ -43,6 +43,7 @@ namespace FreeSql.Internal.CommonProvider
         public Expression _selectExpression;
         public List<GlobalFilter.Item> _whereGlobalFilter;
         public Func<bool> _cancel;
+        public bool _is_AsTreeCte;
 
         int _disposeCounter;
         ~Select0Provider()
@@ -122,6 +123,7 @@ namespace FreeSql.Internal.CommonProvider
             to._selectExpression = from._selectExpression;
             to._whereGlobalFilter = new List<GlobalFilter.Item>(from._whereGlobalFilter.ToArray());
             to._cancel = from._cancel;
+            to._is_AsTreeCte = from._is_AsTreeCte;
         }
 
         public Expression ConvertStringPropertyToExpression(string property, bool fromFirstTable = false)
@@ -319,6 +321,13 @@ namespace FreeSql.Internal.CommonProvider
             return this.Limit(pageSize) as TSelect;
         }
 
+        public TSelect Page(BasePagingInfo pagingInfo)
+        {
+            pagingInfo.Count = this.Count();
+            this.Skip(Math.Max(0, pagingInfo.PageNumber - 1) * pagingInfo.PageSize);
+            return this.Limit(pagingInfo.PageSize) as TSelect;
+        }
+
         public TSelect Skip(int offset)
         {
             _skip = offset;
@@ -343,6 +352,7 @@ namespace FreeSql.Internal.CommonProvider
                 case DataType.Oracle:
                 case DataType.OdbcOracle:
                 case DataType.Firebird:
+                case DataType.GBase:
                     break;
                 default:
                     _select = "SELECT ";
@@ -386,6 +396,11 @@ namespace FreeSql.Internal.CommonProvider
             if (_params.Any()) del._params = new List<DbParameter>(_params.ToArray());
             if (_whereGlobalFilter.Any()) del._whereGlobalFilter = new List<GlobalFilter.Item>(_whereGlobalFilter.ToArray());
             del.WithConnection(_connection).WithTransaction(_transaction).CommandTimeout(_commandTimeout);
+            if (_is_AsTreeCte == false)
+            {
+                var trytbname = "";
+                del.AsTable(old => GetTableRuleUnions().FirstOrDefault()?.TryGetValue(_tables[0].Table.Type, out trytbname) == true && trytbname.IndexOf(' ') == -1 ? trytbname : null);
+            }
             switch (_orm.Ado.DataType)
             {
                 case DataType.Dameng:
@@ -393,6 +408,7 @@ namespace FreeSql.Internal.CommonProvider
                 case DataType.Oracle:
                 case DataType.OdbcOracle:
                 case DataType.Firebird:
+                case DataType.GBase:
                     break;
                 default:
                     var beforeSql = this._select;
@@ -414,6 +430,11 @@ namespace FreeSql.Internal.CommonProvider
             if (_params.Any()) upd._params = new List<DbParameter>(_params.ToArray());
             if (_whereGlobalFilter.Any()) upd._whereGlobalFilter = new List<GlobalFilter.Item>(_whereGlobalFilter.ToArray());
             upd.WithConnection(_connection).WithTransaction(_transaction).CommandTimeout(_commandTimeout);
+            if (_is_AsTreeCte == false)
+            {
+                var trytbname = "";
+                upd.AsTable(old => GetTableRuleUnions().FirstOrDefault()?.TryGetValue(_tables[0].Table.Type, out trytbname) == true && trytbname.IndexOf(' ') == -1 ? trytbname : null);
+            }
             switch (_orm.Ado.DataType)
             {
                 case DataType.Dameng:
@@ -421,6 +442,7 @@ namespace FreeSql.Internal.CommonProvider
                 case DataType.Oracle:
                 case DataType.OdbcOracle:
                 case DataType.Firebird:
+                case DataType.GBase:
                     break;
                 default:
                     var beforeSql = this._select;
@@ -525,16 +547,34 @@ namespace FreeSql.Internal.CommonProvider
             {
                 if (string.IsNullOrEmpty(fi.Field) == false)
                 {
-                    Expression exp = ConvertStringPropertyToExpression(fi.Field);
+                    Expression exp = null;
                     switch (fi.Operator)
                     {
+                        case DynamicFilterOperator.Custom:
+                            var fiValueCustomArray = fi.Field?.ToString().Split(new[] { ' ' }, 2);
+                            if (fiValueCustomArray.Length != 2) throw new ArgumentException("Custom 要求 Field 应该空格分割，并且长度为 2，格式：{静态方法名}{空格}{反射信息}");
+                            if (string.IsNullOrWhiteSpace(fiValueCustomArray[0])) throw new ArgumentException("Custom {静态方法名}不能为空，格式：{静态方法名}{空格}{反射信息}");
+                            if (string.IsNullOrWhiteSpace(fiValueCustomArray[1])) throw new ArgumentException("Custom {反射信息}不能为空，格式：{静态方法名}{空格}{反射信息}");
+                            var fiValue1Type = Type.GetType(fiValueCustomArray[1]);
+                            if (fiValue1Type == null) throw new ArgumentException($"Custom 找不到对应的{{反射信息}}：{fiValueCustomArray[1]}");
+                            var fiValue0Method = fiValue1Type.GetMethod(fiValueCustomArray[0], new Type[] { typeof(string) });
+                            if (fiValue0Method == null) throw new ArgumentException($"Custom 找不到对应的{{静态方法名}}：{fiValueCustomArray[0]}");
+                            if (MethodIsDynamicFilterCustomAttribute(fiValue0Method) == false) throw new ArgumentException($"Custom 对应的{{静态方法名}}：{fiValueCustomArray[0]} 未设置 [DynamicFilterCustomAttribute] 特性");
+                            var fiValue0MethodReturn = fiValue0Method?.Invoke(null, new object[] { fi.Value?.ToString() })?.ToString();
+                            exp = Expression.Call(typeof(SqlExt).GetMethod("InternalRawSql", BindingFlags.NonPublic | BindingFlags.Static), Expression.Constant(fiValue0MethodReturn, typeof(string)));
+                            break;
+
                         case DynamicFilterOperator.Contains:
                         case DynamicFilterOperator.StartsWith:
                         case DynamicFilterOperator.EndsWith:
                         case DynamicFilterOperator.NotContains:
                         case DynamicFilterOperator.NotStartsWith:
                         case DynamicFilterOperator.NotEndsWith:
+                            exp = ConvertStringPropertyToExpression(fi.Field);
                             if (exp.Type != typeof(string)) exp = Expression.TypeAs(exp, typeof(string));
+                            break;
+                        default:
+                            exp = ConvertStringPropertyToExpression(fi.Field);
                             break;
                     }
                     switch (fi.Operator)
@@ -560,7 +600,7 @@ namespace FreeSql.Internal.CommonProvider
                             if (fiValueRangeArray.Length != 2) throw new ArgumentException($"Range 要求 Value 应该逗号分割，并且长度为 2");
                             exp = Expression.AndAlso(
                                 Expression.GreaterThanOrEqual(exp, Expression.Constant(Utils.GetDataReaderValue(exp.Type, fiValueRangeArray[0]), exp.Type)),
-                                Expression.LessThan(exp, Expression.Constant(Utils.GetDataReaderValue(exp.Type, fiValueRangeArray[1]), exp.Type))); 
+                                Expression.LessThan(exp, Expression.Constant(Utils.GetDataReaderValue(exp.Type, fiValueRangeArray[1]), exp.Type)));
                             break;
                         case DynamicFilterOperator.DateRange:
                             var fiValueDateRangeArray = getFiListValue();
@@ -657,6 +697,21 @@ namespace FreeSql.Internal.CommonProvider
                     string.IsNullOrEmpty(testFilter.Value?.ToString());
             }
         }
+        static ConcurrentDictionary<MethodInfo, bool> _dicMethodIsDynamicFilterCustomAttribute = new ConcurrentDictionary<MethodInfo, bool>();
+        static bool MethodIsDynamicFilterCustomAttribute(MethodInfo method) => _dicMethodIsDynamicFilterCustomAttribute.GetOrAdd(method, m =>
+        {
+            object[] attrs = null;
+            try
+            {
+                attrs = m.GetCustomAttributes(false).ToArray(); //.net core 反射存在版本冲突问题，导致该方法异常
+            }
+            catch { }
+
+            var dyattr = attrs?.Where(a => {
+                return ((a as Attribute)?.TypeId as Type)?.Name == "DynamicFilterCustomAttribute";
+            }).FirstOrDefault();
+            return dyattr != null;
+        });
 
         public TSelect DisableGlobalFilter(params string[] name)
         {
@@ -683,7 +738,7 @@ namespace FreeSql.Internal.CommonProvider
             {
                 case DataType.MySql:
                 case DataType.OdbcMySql:
-                    _tosqlAppendContent = " for update";
+                    _tosqlAppendContent = $"{_tosqlAppendContent} for update";
                     break;
                 case DataType.SqlServer:
                 case DataType.OdbcSqlServer:
@@ -693,21 +748,22 @@ namespace FreeSql.Internal.CommonProvider
                 case DataType.OdbcPostgreSQL:
                 case DataType.KingbaseES:
                 case DataType.OdbcKingbaseES:
-                    _tosqlAppendContent = $" for update{(noawait ? " nowait" : "")}";
+                    _tosqlAppendContent = $"{_tosqlAppendContent} for update{(noawait ? " nowait" : "")}";
                     break;
                 case DataType.Oracle:
                 case DataType.OdbcOracle:
                 case DataType.Dameng:
                 case DataType.OdbcDameng:
-                    _tosqlAppendContent = $" for update{(noawait ? " nowait" : "")}";
+                    _tosqlAppendContent = $"{_tosqlAppendContent} for update{(noawait ? " nowait" : "")}";
                     break;
                 case DataType.Sqlite:
                     break;
+                case DataType.GBase:
                 case DataType.ShenTong: //神通测试中发现，不支持 nowait
-                    _tosqlAppendContent = " for update";
+                    _tosqlAppendContent = $"{_tosqlAppendContent} for update";
                     break;
                 case DataType.Firebird:
-                    _tosqlAppendContent = " for update with lock";
+                    _tosqlAppendContent = $"{_tosqlAppendContent} for update with lock";
                     break;
             }
             return this as TSelect;

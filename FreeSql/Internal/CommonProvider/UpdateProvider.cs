@@ -138,7 +138,7 @@ namespace FreeSql.Internal.CommonProvider
         }
 
         #region 参数化数据限制，或values数量限制
-        internal List<T1>[] SplitSource(int valuesLimit, int parameterLimit)
+        protected internal List<T1>[] SplitSource(int valuesLimit, int parameterLimit)
         {
             valuesLimit = valuesLimit - 1;
             parameterLimit = parameterLimit - 1;
@@ -163,7 +163,7 @@ namespace FreeSql.Internal.CommonProvider
                 ret[a] = _source.GetRange(a * takeMax, Math.Min(takeMax, _source.Count - a * takeMax));
             return ret;
         }
-        protected int SplitExecuteAffrows(int valuesLimit, int parameterLimit)
+        protected virtual int SplitExecuteAffrows(int valuesLimit, int parameterLimit)
         {
             var ss = SplitSource(valuesLimit, parameterLimit);
             var ret = 0;
@@ -237,7 +237,7 @@ namespace FreeSql.Internal.CommonProvider
             return ret;
         }
 
-        protected List<T1> SplitExecuteUpdated(int valuesLimit, int parameterLimit)
+        protected virtual List<T1> SplitExecuteUpdated(int valuesLimit, int parameterLimit)
         {
             var ss = SplitSource(valuesLimit, parameterLimit);
             var ret = new List<T1>();
@@ -351,8 +351,9 @@ namespace FreeSql.Internal.CommonProvider
         {
             var cols = columns.Distinct().ToDictionary(a => a);
             _ignore.Clear();
+            IgnoreCanUpdate();
             foreach (var col in _table.Columns.Values)
-                if (cols.ContainsKey(col.Attribute.Name) == true || cols.ContainsKey(col.CsName) == true)
+                if (!_ignore.ContainsKey(col.Attribute.Name) && (cols.ContainsKey(col.Attribute.Name) == true || cols.ContainsKey(col.CsName) == true))
                     _ignore.Add(col.Attribute.Name, true);
             return this;
         }
@@ -444,7 +445,7 @@ namespace FreeSql.Internal.CommonProvider
             _set.Append(", ").Append(_commonUtils.QuoteSqlName(col.Attribute.Name)).Append(" = ");
 
             var colsql = _noneParameter ? _commonUtils.GetNoneParamaterSqlValue(_params, "u", col, col.Attribute.MapType, val) :
-                _commonUtils.QuoteWriteParamterAdapter(col.Attribute.MapType, $"{_commonUtils.QuoteParamterName("p_")}{_params.Count}");
+                _commonUtils.QuoteWriteParamterAdapter(col.Attribute.MapType, _commonUtils.QuoteParamterName($"p_{_params.Count}"));
             _set.Append(_commonUtils.RewriteColumn(col, colsql));
             if (_noneParameter == false)
                 _commonUtils.AppendParamter(_params, null, col, col.Attribute.MapType, val);
@@ -545,6 +546,7 @@ namespace FreeSql.Internal.CommonProvider
                     if (_ignore.ContainsKey(trycol.Attribute.Name)) continue;
                     SetPriv(trycol, kv.Value);
                 }
+                return this;
             }
             var dtoProps = dto.GetType().GetProperties();
             foreach (var dtoProp in dtoProps)
@@ -675,7 +677,7 @@ namespace FreeSql.Internal.CommonProvider
             return this;
         }
 
-        public string ToSql()
+        public virtual string ToSql()
         {
             if (_where.Length == 0 && _source.Any() == false) return null;
 
